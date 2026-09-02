@@ -1,10 +1,16 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from app.analyzer import review
 from app.github_review import GitHubReviewError, review_pull_request
 from app.llm import explain_findings
 from app.models import Finding, ReviewRequest, ReviewResponse
 
 app = FastAPI(title="AI Code Review & Bug Detection Platform", version="2.0.0")
+
+
+@app.get("/", include_in_schema=False)
+def home():
+    return FileResponse("static/index.html")
 
 
 @app.get("/health")

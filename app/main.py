@@ -1,8 +1,9 @@
+import re
 import time
 
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.analyzer import review
@@ -18,8 +19,15 @@ init_db()
 
 
 class AuthRequest(BaseModel):
-    email: EmailStr
+    email: str = Field(min_length=5, max_length=320)
     password: str = Field(min_length=8, max_length=128)
+
+
+def normalize_email(email: str) -> str:
+    email = email.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        raise HTTPException(status_code=422, detail="Invalid email address")
+    return email
 
 
 @app.get("/", include_in_schema=False)
@@ -40,7 +48,7 @@ def metrics():
 
 @app.post("/api/v1/auth/register")
 def register(request: AuthRequest, db: Session = Depends(get_db)):
-    email = request.email.lower()
+    email = normalize_email(request.email)
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=409, detail="Email already registered")
     user = User(email=email, password_hash=hash_password(request.password))
@@ -52,7 +60,8 @@ def register(request: AuthRequest, db: Session = Depends(get_db)):
 
 @app.post("/api/v1/auth/login")
 def login(request: AuthRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == request.email.lower()).first()
+    email = normalize_email(request.email)
+    user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(request.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     return {"access_token": create_access_token(user), "token_type": "bearer"}
